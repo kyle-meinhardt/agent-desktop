@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Network
 
@@ -11,9 +12,15 @@ func watchDesktop(_ connection: any SessionConnection) async throws {
         server.frame = frame
         if first {
             let url = try await server.start()
+            let address = url.absoluteString
+            let terminal = ProcessInfo.processInfo.environment["TERM"] ?? "dumb"
+            let interactive = isatty(STDOUT_FILENO) == 1 && !terminal.isEmpty && terminal != "dumb"
+            let end = "\u{1b}\\"
+            let link = interactive ? "\u{1b}]8;;\(address)\(end)\(address)\u{1b}]8;;\(end)" : address
             FileHandle.standardOutput.write(Data((
-                "Watch the read-only desktop at \(url.absoluteString)\n" +
-                "Open the link in your browser. Press Ctrl+C here to stop.\n"
+                "Watch the read-only desktop in your browser\n" +
+                "\(link)\n" +
+                "In Apple Terminal, Command-double-click the URL. Press Ctrl+C here to stop.\n"
             ).utf8))
         }
     }

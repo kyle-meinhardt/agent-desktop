@@ -72,7 +72,7 @@ The preview uses colored characters and fits the current window. Press **Ctrl+C*
 ./dist/agent-desktop watch agent
 ```
 
-Open the local URL printed in Terminal. Leave the command running while you watch. The read-only view updates while the agent works through MCP. Press **Ctrl+C** in Terminal to close the viewer. The URL grants access to the read-only feed to anyone on the Mac who has it, so keep it private.
+Click the local URL printed in your terminal. In Apple Terminal, hold **Command** and double-click the URL. Leave the command running while you watch. The read-only view updates while the agent works through MCP. Press **Ctrl+C** in Terminal to close the viewer. The URL grants access to the read-only feed to anyone on the Mac who has it, so keep it private.
 
 If you previously configured only the terminal-mac prototype, run the standalone `configure agent` command in step 3 first. The viewer uses Agent Desktop's own Keychain entry. You can keep the existing MCP registration while using the viewer.
 
