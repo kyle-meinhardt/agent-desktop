@@ -30,6 +30,7 @@ cp "$binary_dir/agent-desktop" "$app/Contents/MacOS/"
 cp .build/session-libs/*.dylib "$app/Contents/Frameworks/"
 cp resources/Info.plist "$app/Contents/"
 cp scripts/{prepare-screen-sharing.sh,screen-sharing-relay.py} "$app/Contents/Resources/"
+cp -R skills/agent-desktop "$app/Contents/Resources/"
 cp LICENSE THIRD_PARTY_NOTICES.md licenses/*.txt "$app/Contents/Resources/licenses/"
 for library in "$app"/Contents/Frameworks/*.dylib; do
   codesign --force --sign "$identity" --timestamp=none "$library"

@@ -6,6 +6,20 @@ Let Codex operate a separate macOS user desktop while you keep using your own. A
 
 You need an Apple silicon Mac, Xcode or Command Line Tools with Swift 6, Homebrew, Python 3.11 or newer, and Codex. The backend was tested on macOS 27.2. Runtime compatibility also depends on the macOS versions supported by your Homebrew libraries.
 
+### Guided install
+
+From your regular macOS account, clone the repository and run the installer in Terminal:
+
+```sh
+git clone https://github.com/kyle-meinhardt/agent-desktop.git
+cd agent-desktop
+bash scripts/install.sh
+```
+
+The installer checks dependencies, builds the app, and runs `agent-desktop setup`. Setup can create the standard `agent` account and add it to an existing Screen Sharing access group after you confirm each change. It pauses for first login on a new account and guides you through enabling Screen Sharing or adding `agent` in System Settings when needed. Enter the account password at the hidden prompt. Verify the preview belongs to `agent` before approving Codex input.
+
+After verification, setup installs the Codex skill, registers the MCP if the name is available, and offers a Terminal shortcut through `~/.local/bin`. Rerun `./dist/agent-desktop setup` to resume. To inspect local prerequisites without making changes, run `./dist/agent-desktop setup --check`.
+
 ### 1. Prepare the separate account
 
 Create a standard macOS user named `agent` in **System Settings → Users & Groups**. Log in to that account once to complete its setup, then return to your regular account. In **System Settings → General → Sharing → Screen Sharing**, enable Screen Sharing and allow the `agent` account. Use the account password for authentication. You can leave Remote Login off for this same-Mac connection.

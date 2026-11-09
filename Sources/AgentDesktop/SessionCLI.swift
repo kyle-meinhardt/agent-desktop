@@ -15,6 +15,10 @@ struct CLI {
         case "screen-sharing":
             guard tail.isEmpty else { throw Failure("Usage: agent-desktop screen-sharing") }
             try openScreenSharing()
+        case "setup":
+            let args = try Arguments(tail, flags: ["check"])
+            guard args.positionals.isEmpty else { throw Failure("Usage: agent-desktop setup [--check]") }
+            try await GuidedSetup(store: store, resources: resources).run(checkOnly: args.flags.contains("check"), command: run)
         case "doctor": try printJSON(["sessionLibraryAvailable": String(VNCConnection.available)])
         case "configure":
             let args = try Arguments(tail, options: ["host", "port", "user"])
@@ -79,10 +83,12 @@ struct CLI {
         }
     }
 
+    private var resources: URL {
+        URL(fileURLWithPath: launcherPath).resolvingSymlinksInPath()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources")
+    }
+
     private func openScreenSharing() throws {
-        let executable = URL(fileURLWithPath: launcherPath).resolvingSymlinksInPath()
-        let resources = executable.deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Resources")
         let prepare = resources.appendingPathComponent("prepare-screen-sharing.sh")
         guard FileManager.default.fileExists(atPath: prepare.path) else {
             throw Failure("Build the app with bash scripts/build.sh, then use dist/agent-desktop")
@@ -160,6 +166,7 @@ struct CLI {
     Agent Desktop — a separate user desktop through macOS Screen Sharing
 
     screen-sharing          Open the agent desktop in Apple Screen Sharing (default)
+    setup [--check]         Guide installation or check local prerequisites
     configure [NAME] [--host 127.0.0.1 --port 5900 --user agent]
     action [NAME] status|screenshot|click|move|drag|scroll|type|key
     approve [NAME]           Enable input after verifying a screenshot
