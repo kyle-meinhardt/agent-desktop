@@ -6,12 +6,15 @@ struct CLI {
     let store = Store()
 
     func run(_ input: [String]) async throws {
-        let command = input.first ?? "help"
+        let command = input.first ?? "screen-sharing"
         let tail = Array(input.dropFirst())
         let profiles = SessionProfiles(store: store)
         switch command {
         case "help", "--help", "-h": print(Self.sessionHelp)
         case "--version", "version": print("agent-desktop \(appVersion)")
+        case "screen-sharing":
+            guard tail.isEmpty else { throw Failure("Usage: agent-desktop screen-sharing") }
+            try openScreenSharing()
         case "doctor": try printJSON(["sessionLibraryAvailable": String(VNCConnection.available)])
         case "configure":
             let args = try Arguments(tail, options: ["host", "port", "user"])
@@ -76,6 +79,37 @@ struct CLI {
         }
     }
 
+    private func openScreenSharing() throws {
+        let executable = URL(fileURLWithPath: launcherPath).resolvingSymlinksInPath()
+        let resources = executable.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources")
+        let prepare = resources.appendingPathComponent("prepare-screen-sharing.sh")
+        guard FileManager.default.fileExists(atPath: prepare.path) else {
+            throw Failure("Build the app with bash scripts/build.sh, then use dist/agent-desktop")
+        }
+
+        let relay = Process()
+        let output = Pipe()
+        relay.executableURL = URL(fileURLWithPath: "/bin/bash")
+        relay.arguments = [prepare.path, store.root.path]
+        relay.standardOutput = output
+        try relay.run()
+        let address = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        relay.waitUntilExit()
+        guard relay.terminationStatus == 0, address == "vnc://agent@127.0.0.1:5903" else {
+            throw Failure("Could not prepare the local Screen Sharing relay")
+        }
+
+        stderr("In Screen Sharing, sign in as agent. If prompted, choose Log In to agent as Yourself, then use Observe Mode.")
+        let viewer = Process()
+        viewer.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        viewer.arguments = ["-b", "com.apple.ScreenSharing", address]
+        try viewer.run()
+        viewer.waitUntilExit()
+        guard viewer.terminationStatus == 0 else { throw Failure("Could not open Apple Screen Sharing") }
+    }
+
     private func sessionName(_ args: Arguments) throws -> String {
         guard args.positionals.count <= 1 else { throw Failure("Expected one session name") }
         let name = args.positionals.first ?? "agent"
@@ -125,6 +159,7 @@ struct CLI {
     static let sessionHelp = """
     Agent Desktop — a separate user desktop through macOS Screen Sharing
 
+    screen-sharing          Open the agent desktop in Apple Screen Sharing (default)
     configure [NAME] [--host 127.0.0.1 --port 5900 --user agent]
     action [NAME] status|screenshot|click|move|drag|scroll|type|key
     approve [NAME]           Enable input after verifying a screenshot

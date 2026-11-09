@@ -1,10 +1,10 @@
 # Agent Desktop
 
-Let Codex operate a separate macOS user desktop while you keep using your own. Agent Desktop connects directly to macOS Screen Sharing on the same Mac and exposes screenshots, clicks, typing, keyboard shortcuts, and scrolling through MCP. You can watch the agent work in a read-only browser tab or terminal preview.
+Let Codex operate a separate macOS user desktop while you keep using your own. Agent Desktop connects directly to macOS Screen Sharing on the same Mac and exposes screenshots, clicks, typing, keyboard shortcuts, and scrolling through MCP. You can watch the agent work in Apple Screen Sharing, a read-only browser tab, or a terminal preview.
 
 ## Get started
 
-You need an Apple silicon Mac, Xcode or Command Line Tools with Swift 6, Homebrew, Python 3, and Codex. The backend was tested on macOS 27.2. Runtime compatibility also depends on the macOS versions supported by your Homebrew libraries.
+You need an Apple silicon Mac, Xcode or Command Line Tools with Swift 6, Homebrew, Python 3.11 or newer, and Codex. The backend was tested on macOS 27.2. Runtime compatibility also depends on the macOS versions supported by your Homebrew libraries.
 
 ### 1. Prepare the separate account
 
@@ -60,6 +60,24 @@ To disable input while retaining screenshots:
 
 ## Watch the agent work
 
+To open the separate `agent` desktop in Apple Screen Sharing, run this from the checkout:
+
+```sh
+./dist/agent-desktop
+```
+
+The command starts a loopback-only relay at `127.0.0.1:5903` for your current macOS login. It requires a virtual session grant before it forwards screen data. Sign in with the `agent` account password. If prompted to choose a session, click **Log In to agent as Yourself**. Confirm you see the `agent` desktop, then switch to **Observe Mode**. Remote Login can stay off.
+
+To make the command available as `agent-desktop` in zsh, add the absolute path to the built executable to your `~/.zshrc`:
+
+```sh
+alias agent-desktop='/absolute/path/to/agent-desktop/dist/agent-desktop'
+```
+
+To stop the relay and disconnect its viewers, run `launchctl remove local.agent-desktop.screen-forward`. The next launch starts it again. The relay supports the native RSA/SRP handshake and closes when it encounters an unsupported handshake or macOS denies the virtual session.
+
+### Terminal and browser viewers
+
 After configuring the session, run this from the checkout to watch directly in Apple Terminal or another interactive terminal with 256-color support:
 
 ```sh
@@ -86,6 +104,7 @@ Agent Desktop uses a separate account on the same OS. Both accounts share system
 bash scripts/build-session-library.sh
 swift test
 python3 scripts/test-session-rfb.py
+python3 scripts/test-screen-sharing-relay.py
 ```
 
 The source retains attribution for the terminal-mac code used to develop the session backend. See the [license](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
