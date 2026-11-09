@@ -10,6 +10,15 @@ You need an Apple silicon Mac, Xcode or Command Line Tools with Swift 6, Homebre
 
 Create a standard macOS user named `agent` in **System Settings → Users & Groups**. Log in to that account once to complete its setup, then return to your regular account. In **System Settings → General → Sharing → Screen Sharing**, enable Screen Sharing and allow the `agent` account. Use the account password for authentication. You can leave Remote Login off for this same-Mac connection.
 
+<details>
+<summary>Screen Sharing setup screenshots</summary>
+
+![macOS Sharing settings with Screen Sharing on and Remote Login off](docs/images/macos-sharing-settings.png)
+
+![Screen Sharing details with Only these users selected and agent in the allowed list](docs/images/screen-sharing-allowed-users.png)
+
+</details>
+
 ### 2. Build Agent Desktop
 
 ```sh
