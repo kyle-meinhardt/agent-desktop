@@ -118,9 +118,12 @@ struct SessionProfiles: Sendable {
 final class KeychainSessionConnection: SessionConnection {
     private let profile: SessionProfile
     private let profiles: SessionProfiles
+    private let readOnly: Bool
     private var connection: VNCConnection?
-    init(profile: SessionProfile, profiles: SessionProfiles) {
-        self.profile = profile; self.profiles = profiles
+    init(profile: SessionProfile, profiles: SessionProfiles, readOnly: Bool = false) {
+        self.profile = profile
+        self.profiles = profiles
+        self.readOnly = readOnly
     }
     func call(_ request: Request) async throws -> VNCResponse {
         if connection == nil {
@@ -128,7 +131,10 @@ final class KeychainSessionConnection: SessionConnection {
             guard budget > 0 else { throw Failure("Session request expired before execution") }
             let opened = try VNCConnection(host: profile.host, port: profile.port, username: profile.username,
                                            password: profiles.readPassword(profile.name),
-                                           inputAuthorization: { [profiles, profile] in try profiles.requireInputApproval(for: profile) })
+                                           inputAuthorization: { [profiles, profile, readOnly] in
+                                               guard !readOnly else { throw Failure("The viewer cannot send input") }
+                                               try profiles.requireInputApproval(for: profile)
+                                           })
             connection = opened
             // A Keychain authorization prompt can outlast the action timeout.
             // Start the first action's budget after that one-time authorization.

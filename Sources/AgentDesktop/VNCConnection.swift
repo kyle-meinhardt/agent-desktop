@@ -7,7 +7,12 @@ import UniformTypeIdentifiers
 struct VNCResponse {
     let values: [String: String]
     let png: Data?
-    init(values: [String: String] = [:], png: Data? = nil) { self.values = values; self.png = png }
+    let jpeg: Data?
+    init(values: [String: String] = [:], png: Data? = nil, jpeg: Data? = nil) {
+        self.values = values
+        self.png = png
+        self.jpeg = jpeg
+    }
 }
 
 /// A connection owns one VNC socket. All socket/decoder access stays on its serial queue.
@@ -68,7 +73,7 @@ final class VNCConnection: @unchecked Sendable {
             try self.ensureConnected()
             // Keychain/network setup may have outlasted the approval that the
             // outer backend checked. Fail closed against revocation or retargeting.
-            if !["status", "screenshot", "snapshot"].contains(request.action) {
+            if !["status", "screenshot", "snapshot", "watch-frame"].contains(request.action) {
                 try self.inputAuthorization()
             }
             let deadline = wasConnected ? request.deadline : request.deadline.addingTimeInterval(Date().timeIntervalSince(started))
@@ -148,6 +153,10 @@ final class VNCConnection: @unchecked Sendable {
         }
         switch request.action {
         case "status": return VNCResponse(values: status())
+        case "watch-frame":
+            let sequence = tm_vnc_sequence(connection)
+            guard sequence > 0, a["since"] != String(sequence) else { return VNCResponse() }
+            return VNCResponse(values: ["sequence": String(sequence)], jpeg: try encodeFrame(as: .jpeg))
         case "screenshot", "snapshot":
             let previous = tm_vnc_sequence(connection)
             try checked(tm_vnc_request_frame(connection))
@@ -160,7 +169,7 @@ final class VNCConnection: @unchecked Sendable {
                 if previous == 0 && tm_vnc_sequence(connection) > 0 { break }
             }
             guard tm_vnc_sequence(connection) > 0 else { throw Failure("Timed out waiting for a complete Screen Sharing frame") }
-            return VNCResponse(values: status().merging(["sequence": String(tm_vnc_sequence(connection))]) { $1 }, png: try png())
+            return VNCResponse(values: status().merging(["sequence": String(tm_vnc_sequence(connection))]) { $1 }, png: try encodeFrame(as: .png))
         case "move":
             let (x, y) = try point(); try mouse(x, y)
         case "click":
@@ -230,7 +239,7 @@ final class VNCConnection: @unchecked Sendable {
         for code in held { try checked(tm_vnc_key(connection, code, 1)) }
         try checked(tm_vnc_key(connection, key, 1)); try checked(tm_vnc_key(connection, key, 0))
     }
-    private func png() throws -> Data {
+    private func encodeFrame(as type: UTType) throws -> Data {
         guard let pixels = tm_vnc_pixels(connection), width > 0, height > 0 else { throw Failure("No Screen Sharing frame") }
         let data = Data(bytes: pixels, count: width * height * 4)
         guard let provider = CGDataProvider(data: data as CFData),
@@ -238,8 +247,9 @@ final class VNCConnection: @unchecked Sendable {
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue).union(.byteOrder32Little),
                                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { throw Failure("Cannot decode Screen Sharing frame") }
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil) else { throw Failure("Cannot encode Screen Sharing frame") }
-        CGImageDestinationAddImage(destination, image, nil)
+        guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { throw Failure("Cannot encode Screen Sharing frame") }
+        let options = type == .jpeg ? [kCGImageDestinationLossyCompressionQuality: 0.82] as CFDictionary : nil
+        CGImageDestinationAddImage(destination, image, options)
         guard CGImageDestinationFinalize(destination) else { throw Failure("Cannot encode Screen Sharing frame") }
         return output as Data
     }
