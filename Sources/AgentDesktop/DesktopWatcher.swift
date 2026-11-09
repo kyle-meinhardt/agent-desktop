@@ -29,13 +29,19 @@ func watchDesktopFrames(
     // Reuse the push framebuffer. A full screenshot request every frame
     // would compete with the agent's connection and macOS Screen Sharing.
     var sequence: UInt64 = 0
+    var lastImage: Data?
     while !Task.isCancelled {
         let response = try await connection.call(Request(action: "watch-frame", arguments: ["since": String(sequence)], timeout: 5))
         try Task.checkCancellation()
         if startupDeadline == nil { startupDeadline = clock.now + .seconds(15) }
         if let image = response.jpeg, let value = response.values["sequence"].flatMap(UInt64.init) {
             sequence = value
-            try await update((value, image))
+            if image == lastImage {
+                try await update(nil)
+            } else {
+                lastImage = image
+                try await update((value, image))
+            }
         } else if sequence > 0 {
             try await update(nil)
         } else if let startupDeadline, clock.now >= startupDeadline {

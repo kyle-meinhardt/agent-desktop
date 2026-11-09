@@ -31,6 +31,8 @@ final class VNCConnection: @unchecked Sendable {
     private var connected = false
     private var connectedAt: Date?
     private var startupRefreshFinished = false
+    private let clock = ContinuousClock()
+    private var nextWatchRefresh: ContinuousClock.Instant?
     private var failed = false
     private var pointer = (x: 0, y: 0)
     private let username: String
@@ -155,7 +157,18 @@ final class VNCConnection: @unchecked Sendable {
         case "status": return VNCResponse(values: status())
         case "watch-frame":
             let sequence = tm_vnc_sequence(connection)
-            guard sequence > 0, a["since"] != String(sequence) else { return VNCResponse() }
+            guard sequence > 0 else { return VNCResponse() }
+            let now = clock.now
+            if a["since"] == String(sequence) {
+                // Some virtual sessions only send a new frame after a request.
+                // Keep push updates fast and refresh at most once per idle second.
+                if let nextWatchRefresh, now >= nextWatchRefresh {
+                    try checked(tm_vnc_request_frame(connection))
+                    self.nextWatchRefresh = now + .seconds(1)
+                }
+                return VNCResponse()
+            }
+            nextWatchRefresh = now + .seconds(1)
             return VNCResponse(values: ["sequence": String(sequence)], jpeg: try encodeFrame(as: .jpeg))
         case "screenshot", "snapshot":
             let previous = tm_vnc_sequence(connection)
