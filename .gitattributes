@@ -1,0 +1,2 @@
+# Preserve original whitespace in unified diff context.
+patches/*.patch -whitespace

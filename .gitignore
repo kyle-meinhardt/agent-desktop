@@ -1,0 +1,14 @@
+.build/
+dist/
+.swiftpm/
+.DS_Store
+*.xcuserstate
+*.ipsw
+*.img
+*.vzvmsave
+# Personal signing material must never be committed.
+*.p12
+*.p8
+*.cer
+
+__pycache__/
