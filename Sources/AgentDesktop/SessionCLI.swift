@@ -15,6 +15,15 @@ struct CLI {
         case "screen-sharing":
             guard tail.isEmpty else { throw Failure("Usage: agent-desktop screen-sharing") }
             try openScreenSharing()
+        case "create":
+            guard tail == ["agent"] else {
+                throw Failure("Usage: agent-desktop create agent. Enter the password at the hidden prompt.")
+            }
+            if try GuidedSetup(store: store, resources: resources).createAgentAccount() {
+                print("Created the standard macOS account agent. Log in to it once before running agent-desktop setup.")
+            } else {
+                print("The standard macOS account agent already exists.")
+            }
         case "setup":
             let args = try Arguments(tail, flags: ["check"])
             guard args.positionals.isEmpty else { throw Failure("Usage: agent-desktop setup [--check]") }
@@ -166,6 +175,7 @@ struct CLI {
     Agent Desktop — a separate user desktop through macOS Screen Sharing
 
     screen-sharing          Open the agent desktop in Apple Screen Sharing (default)
+    create agent            Create the standard macOS account with a hidden password prompt
     setup [--check]         Guide installation or check local prerequisites
     configure [NAME] [--host 127.0.0.1 --port 5900 --user agent]
     action [NAME] status|screenshot|click|move|drag|scroll|type|key

@@ -20,6 +20,16 @@ The installer checks dependencies, builds the app, and runs `agent-desktop setup
 
 After verification, setup installs the Codex skill, registers the MCP if the name is available, and offers a Terminal shortcut through `~/.local/bin`. Rerun `./dist/agent-desktop setup` to resume. To inspect local prerequisites without making changes, run `./dist/agent-desktop setup --check`.
 
+### Create the account separately
+
+If Agent Desktop is already built, you can create just the standard macOS account:
+
+```sh
+./dist/agent-desktop create agent
+```
+
+Authorize the request as a macOS administrator, then enter the new account password at the hidden prompt. The command reuses an existing standard `agent` account with its current password. Log in to a new account once before running setup.
+
 ### 1. Prepare the separate account
 
 Create a standard macOS user named `agent` in **System Settings → Users & Groups**. Log in to that account once to complete its setup, then return to your regular account. In **System Settings → General → Sharing → Screen Sharing**, enable Screen Sharing and allow the `agent` account. Use the account password for authentication. You can leave Remote Login off for this same-Mac connection.

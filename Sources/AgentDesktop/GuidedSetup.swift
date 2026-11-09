@@ -46,12 +46,10 @@ struct GuidedSetup {
 
         if account == nil {
             try confirm("Create a standard local macOS account named agent? macOS will prompt for authorization and a password.")
-            try requireSuccess("/usr/bin/sudo", ["/usr/sbin/sysadminctl", "-addUser", "agent",
-                                              "-fullName", "Agent Desktop", "-password", "-"])
-            guard try localAgentUID() != nil else { throw Failure("macOS did not create the agent account") }
+        }
+        if try createAgentAccount() {
             try continueAfter("Log in to agent once, complete macOS’s first-login steps, then return to this account.")
         }
-        try verifySeparateStandardAccount()
 
         if try !screenSharingPortReachable() {
             try continueAfter("Turn on Screen Sharing in System Settings → General → Sharing.")
@@ -95,6 +93,20 @@ struct GuidedSetup {
         stderr("Setup complete. Start a new Codex session to load the MCP configuration and skill.")
     }
 
+    func createAgentAccount() throws -> Bool {
+        if try localAgentUID() != nil {
+            try verifySeparateStandardAccount()
+            return false
+        }
+        guard isatty(STDIN_FILENO) == 1, geteuid() != 0, NSUserName() != "agent" else {
+            throw Failure("Run create agent interactively from your regular macOS account, without sudo")
+        }
+        try requireSuccess("/usr/bin/sudo", ["/usr/sbin/sysadminctl", "-addUser", "agent",
+                                             "-fullName", "Agent Desktop", "-password", "-"])
+        try verifySeparateStandardAccount()
+        return true
+    }
+
     private func localAgentUID() throws -> Int? {
         let record = try run("/usr/bin/dscl", [".", "-read", "/Users/agent", "UniqueID"], capture: true)
         if record.status == 56 { return nil } // dscl uses the low byte of 14136 (record not found)
@@ -106,11 +118,11 @@ struct GuidedSetup {
 
     private func verifySeparateStandardAccount() throws {
         guard let uid = try localAgentUID(), uid >= 501, uid != Int(geteuid()) else {
-            throw Failure("Setup requires a separate standard local account named agent")
+            throw Failure("Agent Desktop requires a separate standard local account named agent")
         }
         let groups = try run("/usr/bin/id", ["-Gn", "agent"], capture: true)
         guard groups.status == 0, !groups.output.split(whereSeparator: \.isWhitespace).contains("admin") else {
-            throw Failure("Use a standard agent account. Setup cannot reuse an administrator account.")
+            throw Failure("Use a standard agent account. Agent Desktop cannot reuse an administrator account.")
         }
     }
 
