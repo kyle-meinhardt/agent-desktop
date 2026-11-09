@@ -101,7 +101,7 @@ struct CLI {
             throw Failure("Could not prepare the local Screen Sharing relay")
         }
 
-        stderr("In Screen Sharing, sign in as agent. If prompted, choose Log In to agent as Yourself, then use Observe Mode.")
+        stderr("In Screen Sharing, sign in as agent. If prompted, select ‘Log in as yourself: “agent”’ and click Connect, then use Observe Mode.")
         let viewer = Process()
         viewer.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         viewer.arguments = ["-b", "com.apple.ScreenSharing", address]

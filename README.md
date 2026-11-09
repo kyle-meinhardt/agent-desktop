@@ -66,7 +66,9 @@ To open the separate `agent` desktop in Apple Screen Sharing, run this from the 
 ./dist/agent-desktop
 ```
 
-The command starts a loopback-only relay at `127.0.0.1:5903` for your current macOS login. It requires a virtual session grant before it forwards screen data. Sign in with the `agent` account password. If prompted to choose a session, click **Log In to agent as Yourself**. Confirm you see the `agent` desktop, then switch to **Observe Mode**. Remote Login can stay off.
+The command starts a loopback-only relay at `127.0.0.1:5903` for your current macOS login. It requires a virtual session grant before it forwards screen data. Sign in with the `agent` account password. If prompted to choose a session, select **Log in as yourself: “agent”** and click **Connect**. Confirm you see the `agent` desktop, then switch to **Observe Mode**. Remote Login can stay off.
+
+![Apple Screen Sharing dialog with Log in as yourself: “agent” selected and the Connect button visible](docs/images/screen-sharing-agent-login.png)
 
 To make the command available as `agent-desktop` in zsh, add the absolute path to the built executable to your `~/.zshrc`:
 
