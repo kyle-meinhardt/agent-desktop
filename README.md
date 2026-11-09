@@ -1,6 +1,6 @@
 # Agent Desktop
 
-Let Codex operate a separate macOS user desktop while you keep using your own. Agent Desktop connects directly to macOS Screen Sharing on the same Mac and exposes screenshots, clicks, typing, keyboard shortcuts, and scrolling through MCP. You can watch the agent work in a read-only browser tab.
+Let Codex operate a separate macOS user desktop while you keep using your own. Agent Desktop connects directly to macOS Screen Sharing on the same Mac and exposes screenshots, clicks, typing, keyboard shortcuts, and scrolling through MCP. You can watch the agent work in a read-only browser tab or terminal preview.
 
 ## Get started
 
@@ -60,7 +60,13 @@ To disable input while retaining screenshots:
 
 ## Watch the agent work
 
-After configuring the session, run this from the checkout on your Mac:
+After configuring the session, run this from the checkout to watch directly in Apple Terminal or another interactive terminal with 256-color support:
+
+```sh
+./dist/agent-desktop watch agent --terminal
+```
+
+The preview uses colored characters and fits the current window. Press **Ctrl+C** to return to the shell. Use the browser view for fine text and full-color detail:
 
 ```sh
 ./dist/agent-desktop watch agent

@@ -48,10 +48,15 @@ struct CLI {
             try printJSON(["session": name, "inputApproved": "false"])
         case "action": try await sessionAction(tail, profiles: profiles)
         case "watch":
-            let name = try sessionName(Arguments(tail))
+            let args = try Arguments(tail, flags: ["terminal"])
+            let name = try sessionName(args)
             let profile = try profiles.load(name)
             let connection = KeychainSessionConnection(profile: profile, profiles: profiles, readOnly: true)
-            try await watchDesktop(connection)
+            if args.flags.contains("terminal") {
+                try await watchDesktopInTerminal(connection)
+            } else {
+                try await watchDesktop(connection)
+            }
         case "mcp":
             let args = try Arguments(tail, flags: ["config"])
             let name = try sessionName(args)
@@ -124,7 +129,7 @@ struct CLI {
     action [NAME] status|screenshot|click|move|drag|scroll|type|key
     approve [NAME]           Enable input after verifying a screenshot
     revoke [NAME]            Disable input for existing and new connections
-    watch [NAME]            Watch the desktop in a local browser tab
+    watch [NAME] [--terminal]  Watch in a browser or inside your terminal
     mcp [NAME] [--config]    Serve MCP over stdio or print its configuration
     doctor                  Check that the Screen Sharing library can load
     --version

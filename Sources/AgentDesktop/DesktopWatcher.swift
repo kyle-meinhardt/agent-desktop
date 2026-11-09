@@ -3,29 +3,42 @@ import Network
 
 @MainActor
 func watchDesktop(_ connection: any SessionConnection) async throws {
-    let clock = ContinuousClock()
-    var startupDeadline: ContinuousClock.Instant?
     let server = try DesktopWatchServer()
     defer { server.stop() }
+    try await watchDesktopFrames(connection) { frame in
+        guard let frame else { return }
+        let first = server.frame == nil
+        server.frame = frame
+        if first {
+            let url = try await server.start()
+            FileHandle.standardOutput.write(Data((
+                "Watch the read-only desktop at \(url.absoluteString)\n" +
+                "Open the link in your browser. Press Ctrl+C here to stop.\n"
+            ).utf8))
+        }
+    }
+}
 
+@MainActor
+func watchDesktopFrames(
+    _ connection: any SessionConnection,
+    update: ((sequence: UInt64, jpeg: Data)?) async throws -> Void
+) async throws {
+    let clock = ContinuousClock()
+    var startupDeadline: ContinuousClock.Instant?
     // Reuse the push framebuffer. A full screenshot request every frame
     // would compete with the agent's connection and macOS Screen Sharing.
     var sequence: UInt64 = 0
     while !Task.isCancelled {
         let response = try await connection.call(Request(action: "watch-frame", arguments: ["since": String(sequence)], timeout: 5))
+        try Task.checkCancellation()
         if startupDeadline == nil { startupDeadline = clock.now + .seconds(15) }
         if let image = response.jpeg, let value = response.values["sequence"].flatMap(UInt64.init) {
-            server.frame = (value, image)
-            if sequence == 0 {
-                let url = try await server.start()
-                FileHandle.standardOutput.write(Data((
-                    "Watch the read-only desktop at \(url.absoluteString)\n" +
-                    "Open the link in your browser. Press Ctrl+C here to stop.\n"
-                ).utf8))
-            }
             sequence = value
-        }
-        if sequence == 0, let startupDeadline, clock.now >= startupDeadline {
+            try await update((value, image))
+        } else if sequence > 0 {
+            try await update(nil)
+        } else if let startupDeadline, clock.now >= startupDeadline {
             throw Failure("Timed out waiting for a complete Screen Sharing frame. Retry after the agent desktop has started.")
         }
         try await Task.sleep(for: .milliseconds(200))
