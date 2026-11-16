@@ -18,7 +18,7 @@ bash scripts/install.sh
 
 The installer checks dependencies, builds the app, and runs `agent-desktop setup`. Setup can create the standard `agent` account and add it to an existing Screen Sharing access group after you confirm each change. It pauses for first login on a new account and guides you through enabling Screen Sharing or adding `agent` in System Settings when needed. Enter the account password at the hidden prompt. Verify the preview belongs to `agent` before approving Codex input.
 
-After verification, setup installs the Codex skill, registers the MCP if the name is available, and offers a Terminal shortcut through `~/.local/bin`. Rerun `./dist/agent-desktop setup` to resume. To inspect local prerequisites without making changes, run `./dist/agent-desktop setup --check`.
+After verification, setup installs the Codex skill, registers the MCP, and offers a Terminal shortcut through `~/.local/bin`. Rerun `./dist/agent-desktop setup` to resume. If the name is already in use by another registration, review it with `codex mcp get agent-desktop` and run `./dist/agent-desktop setup --replace-mcp` to replace it. To inspect local prerequisites without making changes, run `./dist/agent-desktop setup --check`.
 
 ### Create the account separately
 

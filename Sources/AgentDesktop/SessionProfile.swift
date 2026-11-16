@@ -4,12 +4,13 @@ import Security
 import Darwin
 
 /// A local Screen Sharing connection. Credentials are stored separately in Keychain.
-struct SessionProfile: Codable, Sendable {
+struct SessionProfile: Codable, Equatable, Sendable {
     var name: String
     var host: String
     var port: Int
     var username: String
     var inputApproved: Bool = false
+    var revision: UUID?
 
     func validate() throws {
         try validateName(name)
@@ -44,10 +45,64 @@ struct SessionProfiles: Sendable {
         return profile
     }
     func save(_ profile: SessionProfile) throws {
+        try withProfileLock(profile.name) { try write(profile) }
+    }
+
+    func configure(_ profile: SessionProfile, replacing expected: SessionProfile?, password: String) throws {
         try profile.validate()
-        let directory = try directory(profile.name)
+        try withProfileLock(profile.name) {
+            // Disable the previous approval before replacing its credentials.
+            let current = try? load(profile.name)
+            guard current == expected else {
+                throw Failure("The session profile changed while configuring it. Run configure again.")
+            }
+            if var previous = current {
+                previous.inputApproved = false
+                previous.revision = UUID()
+                try write(previous)
+            }
+            try savePassword(password, name: profile.name)
+            var configured = profile
+            configured.revision = UUID()
+            try write(configured)
+        }
+    }
+
+    func approve(_ expected: SessionProfile) throws {
+        try withProfileLock(expected.name) {
+            var current = try load(expected.name)
+            guard current == expected else {
+                throw Failure("The session profile changed. Verify a new screenshot before approving input.")
+            }
+            current.inputApproved = true
+            try write(current)
+        }
+    }
+
+    func revoke(_ name: String) throws {
+        try withProfileLock(name) {
+            var current = try load(name)
+            current.inputApproved = false
+            current.revision = UUID()
+            try write(current)
+        }
+    }
+
+    private func withProfileLock(_ name: String, _ update: () throws -> Void) throws {
+        let directory = try directory(name)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let file = directory.appendingPathComponent("session.json")
+        let lock = open(directory.appendingPathComponent(".lock").path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard lock >= 0 else { throw Failure("Cannot open the session profile lock") }
+        defer { close(lock) }
+        while flock(lock, LOCK_EX) != 0 {
+            guard errno == EINTR else { throw Failure("Cannot lock the session profile") }
+        }
+        try update()
+    }
+
+    private func write(_ profile: SessionProfile) throws {
+        try profile.validate()
+        let file = try directory(profile.name).appendingPathComponent("session.json")
         let data = try JSONEncoder().encode(profile)
         try data.write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
@@ -126,21 +181,30 @@ final class KeychainSessionConnection: SessionConnection {
         self.readOnly = readOnly
     }
     func call(_ request: Request) async throws -> VNCResponse {
-        if connection == nil {
+        var request = request
+        let active: VNCConnection
+        if let connection {
+            active = connection
+        } else {
             let budget = request.deadline.timeIntervalSinceNow
             guard budget > 0 else { throw Failure("Session request expired before execution") }
-            let opened = try VNCConnection(host: profile.host, port: profile.port, username: profile.username,
-                                           password: profiles.readPassword(profile.name),
-                                           inputAuthorization: { [profiles, profile, readOnly] in
-                                               guard !readOnly else { throw Failure("The viewer cannot send input") }
-                                               try profiles.requireInputApproval(for: profile)
-                                           })
-            connection = opened
-            // A Keychain authorization prompt can outlast the action timeout.
-            // Start the first action's budget after that one-time authorization.
-            return try await opened.call(Request(action: request.action, arguments: request.arguments, timeout: budget))
+            active = try VNCConnection(host: profile.host, port: profile.port, username: profile.username,
+                                       password: profiles.readPassword(profile.name),
+                                       inputAuthorization: { [profiles, profile, readOnly] in
+                                           guard !readOnly else { throw Failure("The viewer cannot send input") }
+                                           try profiles.requireInputApproval(for: profile)
+                                       })
+            connection = active
+            // Keychain authorization can outlast the original action budget.
+            request = Request(action: request.action, arguments: request.arguments, timeout: budget)
         }
-        guard let connection else { throw Failure("Session connection unavailable") }
-        return try await connection.call(request)
+        do {
+            return try await active.call(request)
+        } catch {
+            // Reconnect on a later call. Replaying input could duplicate an action
+            // that reached the desktop before the connection failed.
+            if await active.hasFailed(), connection === active { connection = nil }
+            throw error
+        }
     }
 }

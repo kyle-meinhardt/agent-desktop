@@ -71,6 +71,24 @@ final class SessionProfileTests: XCTestCase {
         }
     }
 
+    func testApprovalRejectsChangesMadeWhilePromptIsOpen() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let profiles = SessionProfiles(store: Store(root: root))
+        let original = profile()
+        try profiles.save(original)
+        try profiles.revoke(original.name)
+        XCTAssertThrowsError(try profiles.approve(original), "Revocation must invalidate a pending approval")
+        var replacement = try profiles.load(original.name)
+        replacement.port += 1
+        try profiles.save(replacement)
+        XCTAssertThrowsError(try profiles.approve(original))
+        XCTAssertEqual(try profiles.load(original.name), replacement)
+
+        try profiles.approve(replacement)
+        XCTAssertTrue(try profiles.load(original.name).inputApproved)
+    }
+
     func testDeferredInputAuthorizationReadsApprovalAndTargetAtExecution() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

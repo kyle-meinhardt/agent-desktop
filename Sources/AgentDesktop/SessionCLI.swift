@@ -25,9 +25,12 @@ struct CLI {
                 print("The standard macOS account agent already exists.")
             }
         case "setup":
-            let args = try Arguments(tail, flags: ["check"])
-            guard args.positionals.isEmpty else { throw Failure("Usage: agent-desktop setup [--check]") }
-            try await GuidedSetup(store: store, resources: resources).run(checkOnly: args.flags.contains("check"), command: run)
+            let args = try Arguments(tail, flags: ["check", "replace-mcp"])
+            guard args.positionals.isEmpty, args.flags.count <= 1 else {
+                throw Failure("Usage: agent-desktop setup [--check | --replace-mcp]")
+            }
+            try await GuidedSetup(store: store, resources: resources)
+                .run(checkOnly: args.flags.contains("check"), replaceMCP: args.flags.contains("replace-mcp"), command: run)
         case "doctor": try printJSON(["sessionLibraryAvailable": String(VNCConnection.available)])
         case "configure":
             let args = try Arguments(tail, options: ["host", "port", "user"])
@@ -38,29 +41,25 @@ struct CLI {
                                          username: args.options["user"] ?? existing?.username ?? "agent", inputApproved: false)
             try profile.validate()
             let password = try SessionProfiles.promptPassword()
-            try profiles.savePassword(password, name: name)
-            try profiles.save(profile)
+            try profiles.configure(profile, replacing: existing, password: password)
             try printJSON(["session": name, "host": profile.host, "port": String(profile.port), "username": profile.username,
                            "inputApproved": "false", "credential": "Keychain"])
             stderr("Next: agent-desktop action \(name) screenshot. Confirm it shows the separate \(profile.username) desktop, then run agent-desktop approve \(name).")
         case "approve":
             let args = try Arguments(tail)
             let name = try sessionName(args)
-            var profile = try profiles.load(name)
+            let profile = try profiles.load(name)
             guard isatty(STDIN_FILENO) == 1 else { throw Failure("Session approval requires an interactive terminal") }
             stderr("Approve input only after viewing this connection with `agent-desktop action \(name) screenshot`.")
             stderr("Confirm the desktop belongs to '\(profile.username)' and your physical desktop stays independent.")
             stderr("This is a user-account session on your Mac, not a VM. Type the account short username to approve input:")
             guard readLine() == profile.username else { throw Failure("Session input was not approved") }
-            profile.inputApproved = true
-            try profiles.save(profile)
+            try profiles.approve(profile)
             try printJSON(["session": name, "inputApproved": "true"])
         case "revoke":
             let args = try Arguments(tail)
             let name = try sessionName(args)
-            var profile = try profiles.load(name)
-            profile.inputApproved = false
-            try profiles.save(profile)
+            try profiles.revoke(name)
             try printJSON(["session": name, "inputApproved": "false"])
         case "action": try await sessionAction(tail, profiles: profiles)
         case "watch":
@@ -154,7 +153,12 @@ struct CLI {
             for key in ["x", "y", "x2", "y2"] { parameters[key] = positions.removeFirst() }
         }
         guard positions.isEmpty else { throw Failure("Unexpected session action arguments") }
-        if args.flags.contains("double") { parameters["double"] = "true" }
+        if args.flags.contains("double") || args.options["count"] != nil {
+            guard verb == "click", !(args.flags.contains("double") && args.options["count"] != nil) else {
+                throw Failure("Use either --count or --double with click")
+            }
+            parameters["count"] = String(try args.integer("count", default: 2, range: 1...3))
+        }
         let timeout = try args.integer("timeout", default: 15, range: 1...120)
         let backend = VNCDesktopBackend(profile: profile, profiles: profiles, connection: KeychainSessionConnection(profile: profile, profiles: profiles))
         let request = Request(action: verb, arguments: parameters, timeout: Double(timeout))
@@ -176,9 +180,10 @@ struct CLI {
 
     screen-sharing          Open the agent desktop in Apple Screen Sharing (default)
     create agent            Create the standard macOS account with a hidden password prompt
-    setup [--check]         Guide installation or check local prerequisites
+    setup [--check | --replace-mcp]  Guide installation or check local prerequisites
     configure [NAME] [--host 127.0.0.1 --port 5900 --user agent]
     action [NAME] status|screenshot|click|move|drag|scroll|type|key
+    action [NAME] click X Y [--count 1..3 | --double]
     approve [NAME]           Enable input after verifying a screenshot
     revoke [NAME]            Disable input for existing and new connections
     watch [NAME] [--terminal]  Watch in a browser or inside your terminal

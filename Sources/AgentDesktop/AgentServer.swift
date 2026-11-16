@@ -100,9 +100,14 @@ final class AgentServer {
         case "click":
             var base = ["x": try int("x"), "y": try int("y")]
             if a["button"] as? String == "right" { base["button"] = "right" }
-            let clicks = max(1, min(3, a["clicks"] as? Int ?? 1))
-            // Each extra click continues the sequence, which macOS reads as a double or triple click.
-            for count in 1...clicks { requests.append(Request(action: "click", arguments: count == 1 ? base : base.merging(["count": String(count)]) { $1 }, timeout: 10)) }
+            if a["clicks"] != nil {
+                let count = try int("clicks")
+                guard let clicks = Int(count), (1...3).contains(clicks) else {
+                    throw Failure("Expected 1–3 clicks")
+                }
+                base["count"] = count
+            }
+            requests = [Request(action: "click", arguments: base, timeout: 10)]
         case "move": requests = [Request(action: "move", arguments: ["x": try int("x"), "y": try int("y")], timeout: 10)]
         case "drag": requests = [Request(action: "drag", arguments: ["x": try int("x"), "y": try int("y"), "x2": try int("toX"), "y2": try int("toY")], timeout: 15)]
         case "scroll":

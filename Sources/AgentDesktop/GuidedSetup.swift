@@ -10,7 +10,7 @@ struct GuidedSetup {
     private let environment = ProcessInfo.processInfo.environment
     private let files = FileManager.default
 
-    func run(checkOnly: Bool, command: ([String]) async throws -> Void) async throws {
+    func run(checkOnly: Bool, replaceMCP: Bool, command: ([String]) async throws -> Void) async throws {
         let account = try localAgentUID()
         if checkOnly {
             let access = if let account, account >= 501, try sharingAccessGroupExists() {
@@ -33,6 +33,11 @@ struct GuidedSetup {
         }
         guard VNCConnection.available, files.fileExists(atPath: resources.appendingPathComponent("agent-desktop/SKILL.md").path) else {
             throw Failure("Build Agent Desktop with bash scripts/build.sh before running setup")
+        }
+
+        let existingMCP = try registeredMCP(codex)
+        if let existingMCP, !existingMCP.matches(command: launcherPath, dataRoot: mcpDataRoot), !replaceMCP {
+            throw Failure("The existing agent-desktop MCP points to a different command, profile, or data directory, or is disabled. Review it with codex mcp get agent-desktop. Run setup --replace-mcp to replace it.")
         }
 
         let profiles = SessionProfiles(store: store)
@@ -88,7 +93,7 @@ struct GuidedSetup {
         }
 
         try installSkill()
-        try registerMCP(codex)
+        try registerMCP(codex, replace: replaceMCP)
         try installShortcut()
         stderr("Setup complete. Start a new Codex session to load the MCP configuration and skill.")
     }
@@ -164,18 +169,51 @@ struct GuidedSetup {
         stderr("Agent Desktop skill is available at \(destination.path).")
     }
 
-    private func registerMCP(_ codex: String) throws {
+    struct MCPRegistration: Decodable {
+        struct Transport: Decodable {
+            let type: String
+            let command: String?
+            let args: [String]?
+            let env: [String: String]?
+        }
+
+        let name: String
+        let enabled: Bool
+        let transport: Transport
+
+        func matches(command: String, dataRoot: String?) -> Bool {
+            guard enabled, transport.type == "stdio", let path = transport.command, path.hasPrefix("/"),
+                  transport.args == ["mcp", "agent"], transport.env?["AGENT_DESKTOP_HOME"] == dataRoot else { return false }
+            return URL(fileURLWithPath: path).resolvingSymlinksInPath() ==
+                URL(fileURLWithPath: command).resolvingSymlinksInPath()
+        }
+    }
+
+    private var mcpDataRoot: String? {
+        environment["AGENT_DESKTOP_HOME"] == nil ? nil : store.root.path
+    }
+
+    private func registeredMCP(_ codex: String) throws -> MCPRegistration? {
         let listing = try run(codex, ["mcp", "list", "--json"], capture: true)
         guard listing.status == 0,
-              let servers = try JSONSerialization.jsonObject(with: Data(listing.output.utf8)) as? [[String: Any]] else {
+              let servers = try? JSONDecoder().decode([MCPRegistration].self, from: Data(listing.output.utf8)) else {
             throw Failure("Could not read existing Codex MCP registrations")
         }
-        guard !servers.contains(where: { $0["name"] as? String == "agent-desktop" }) else {
-            stderr("Kept the existing agent-desktop MCP registration. Use codex mcp get agent-desktop to review it.")
-            return
+        return servers.first { $0.name == "agent-desktop" }
+    }
+
+    private func registerMCP(_ codex: String, replace: Bool) throws {
+        if let existing = try registeredMCP(codex) {
+            if existing.matches(command: launcherPath, dataRoot: mcpDataRoot) { return }
+            guard replace else {
+                throw Failure("The agent-desktop MCP registration changed during setup. Review it and rerun setup.")
+            }
         }
-        let options = environment["AGENT_DESKTOP_HOME"] == nil ? [] : ["--env", "AGENT_DESKTOP_HOME=\(store.root.path)"]
+        let options = mcpDataRoot.map { ["--env", "AGENT_DESKTOP_HOME=\($0)"] } ?? []
         try requireSuccess(codex, ["mcp", "add", "agent-desktop"] + options + ["--", launcherPath, "mcp", "agent"])
+        guard try registeredMCP(codex)?.matches(command: launcherPath, dataRoot: mcpDataRoot) == true else {
+            throw Failure("Codex did not activate the new agent-desktop MCP registration. Inspect it with codex mcp get agent-desktop.")
+        }
     }
 
     private func installShortcut() throws {

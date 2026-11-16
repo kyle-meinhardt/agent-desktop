@@ -61,9 +61,8 @@ final class AgentServerTests: XCTestCase {
         let (server, _, connection, root) = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         _ = try await server.call("click", ["x": 40, "y": 60, "button": "right", "clicks": 3])
-        XCTAssertEqual(connection.requests.count, 3)
-        XCTAssertEqual(connection.requests.map { $0.arguments["count"] ?? "1" }, ["1", "2", "3"])
-        XCTAssertTrue(connection.requests.allSatisfy { $0.arguments["x"] == "40" && $0.arguments["y"] == "60" && $0.arguments["button"] == "right" })
+        XCTAssertEqual(connection.requests.count, 1)
+        XCTAssertEqual(connection.requests.first?.arguments, ["x": "40", "y": "60", "button": "right", "count": "3"])
         _ = try await server.call("drag", ["x": 4, "y": 6, "toX": 104, "toY": 206])
         let drag = try XCTUnwrap(connection.requests.last)
         XCTAssertEqual(drag.action, "drag")

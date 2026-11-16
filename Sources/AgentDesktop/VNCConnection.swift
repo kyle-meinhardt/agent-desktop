@@ -65,6 +65,12 @@ final class VNCConnection: @unchecked Sendable {
         try await perform { try self.ensureConnected() }
     }
 
+    func hasFailed() async -> Bool {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: self.failed) }
+        }
+    }
+
     func call(_ request: Request) async throws -> VNCResponse {
         try await perform {
             guard Date() < request.deadline else { throw Failure("Session request expired before execution") }
@@ -188,7 +194,7 @@ final class VNCConnection: @unchecked Sendable {
         case "click":
             let (x, y) = try point()
             let mask: Int32 = a["button"] == "right" ? 4 : 1
-            let clicks = a["double"] == "true" ? 2 : 1
+            let clicks = try number("count", 1...3, fallback: 1)
             for _ in 0..<clicks { try mouse(x, y, mask); try mouse(x, y) }
         case "drag":
             let (x, y) = try point(), (x2, y2) = try point("x2", "y2")
